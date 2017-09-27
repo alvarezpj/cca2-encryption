@@ -21,7 +21,7 @@ ifdef skel
 IMPL := $(IMPL:.o=-skel.o)
 endif
 
-all : $(TARGETS)
+all : $(TARGETS) tests
 .PHONY : all
 
 # {{{ for debugging
