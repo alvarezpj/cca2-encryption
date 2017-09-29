@@ -1,3 +1,6 @@
 kem-enc
 .tags
 output
+*.swp
+*.o
+
