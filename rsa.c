@@ -30,6 +30,7 @@ int zToFile(FILE* f, mpz_t x)
 	free(buf);
 	return 0;
 }
+
 int zFromFile(FILE* f, mpz_t x)
 {
 	size_t i,len=0;
@@ -56,6 +57,45 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
 	 * the right length, and then test for primality (see the ISPRIME
 	 * macro above).  Once you've found the primes, set up the other
 	 * pieces of the key ({en,de}crypting exponents, and n=pq). */
+        mpz_t phi, temp1, temp2;
+        mpz_inits(phi, temp1, temp2, NULL);	
+        size_t factorBytes = keyBits / 16;		
+        unsigned char* buf = malloc(factorBytes);
+
+        // generate p 
+        randBytes(buf, factorBytes);
+        BYTES2Z(temp1, buf, factorBytes);	
+	if(ISPRIME(temp1) != 2)
+	    mpz_nextprime(temp1, temp1);
+	mpz_set((*K).p, temp1);
+	
+	// generate q
+	randBytes(buf, factorBytes);
+        BYTES2Z(temp2, buf, factorBytes);	
+	if(ISPRIME(temp2) != 2)
+	    mpz_nextprime(temp2, temp2);
+	mpz_set((*K).q, temp2);
+
+	// compute n
+	mpz_mul((*K).n, temp1, temp2);
+
+	// generate e
+        mpz_sub_ui(temp1, temp1, 1);
+        mpz_sub_ui(temp2, temp2, 1);
+        mpz_mul(phi, temp1, temp2);
+        mpz_set_ui(temp1, 1);
+        do
+	{
+	    mpz_add_ui(temp1, temp1, 1);
+            mpz_gcd(temp2, phi, temp1);
+	} while(mpz_cmp_ui(temp2, 1) != 0);		
+	mpz_set((*K).e, temp1);
+
+	// compute d
+	mpz_invert((*K).d, temp1, phi);
+
+	free(buf);
+        mpz_clears(phi, temp1, temp2, NULL);	
 	return 0;
 }
 
@@ -64,13 +104,28 @@ size_t rsa_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 {
 	/* TODO: write this.  Use BYTES2Z to get integers, and then
 	 * Z2BYTES to write the output buffer. */
-	return 0; /* TODO: return should be # bytes written */
+        size_t bw;
+	mpz_t ct, pt;
+	mpz_inits(ct, pt, NULL);
+        BYTES2Z(pt, inBuf, len);
+	mpz_powm(ct, pt, (*K).e, (*K).n);
+	Z2BYTES(outBuf, bw, ct);
+	mpz_clears(ct, pt, NULL);
+	return bw; /* TODO: return should be # bytes written */
 }
+
 size_t rsa_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		RSA_KEY* K)
 {
 	/* TODO: write this.  See remarks above. */
-	return 0;
+	size_t bw;
+	mpz_t ct, pt; 
+	mpz_inits(ct, pt, NULL);
+	BYTES2Z(ct, inBuf, len);
+	mpz_powm(pt, ct, (*K).d, (*K).n);
+	Z2BYTES(outBuf, bw, pt);
+	mpz_clears(ct, pt, NULL);
+	return bw;
 }
 
 size_t rsa_numBytesN(RSA_KEY* K)
@@ -95,6 +150,7 @@ int rsa_writePublic(FILE* f, RSA_KEY* K)
 	zToFile(f,K->e);
 	return 0;
 }
+
 int rsa_writePrivate(FILE* f, RSA_KEY* K)
 {
 	zToFile(f,K->n);
@@ -104,6 +160,7 @@ int rsa_writePrivate(FILE* f, RSA_KEY* K)
 	zToFile(f,K->d);
 	return 0;
 }
+
 int rsa_readPublic(FILE* f, RSA_KEY* K)
 {
 	rsa_initKey(K); /* will set all unused members to 0 */
@@ -111,6 +168,7 @@ int rsa_readPublic(FILE* f, RSA_KEY* K)
 	zFromFile(f,K->e);
 	return 0;
 }
+
 int rsa_readPrivate(FILE* f, RSA_KEY* K)
 {
 	rsa_initKey(K);
@@ -121,6 +179,7 @@ int rsa_readPrivate(FILE* f, RSA_KEY* K)
 	zFromFile(f,K->d);
 	return 0;
 }
+
 int rsa_shredKey(RSA_KEY* K)
 {
 	/* clear memory for key. */
