@@ -36,12 +36,34 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
 	/* TODO: write this.  If entropy is given, apply a KDF to it to get
 	 * the keys (something like HMAC-SHA512 with KDF_KEY will work).
 	 * If entropy is null, just get a random key (you can use the PRF). */
-	return 0;
+	
+    if(entropy == NULL)
+    {
+        size_t const KEY_LEN = 32;
+        unsigned char* buff = malloc(KEY_LEN); 
+        // get hmacKey
+        randBytes(buff, KEY_LEN);
+        memcpy((*K).hmacKey, buff, KEY_LEN);
+         // get aesKey
+        randBytes(buff, KEY_LEN);
+        memcpy((*K).aesKey, buff, KEY_LEN);
+        
+        free(buff);
+    }
+    else
+    {
+         
+
+    }
+
+    return 0;
 }
+
 size_t ske_getOutputLen(size_t inputLen)
 {
 	return AES_BLOCK_SIZE + inputLen + HM_LEN;
 }
+
 size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		SKE_KEY* K, unsigned char* IV)
 {
@@ -50,6 +72,7 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	 * You can assume outBuf has enough space for the result. */
 	return 0; /* TODO: should return number of bytes written, which
 	             hopefully matches ske_getOutputLen(...). */
+
 }
 size_t ske_encrypt_file(const char* fnout, const char* fnin,
 		SKE_KEY* K, unsigned char* IV, size_t offset_out)
@@ -57,6 +80,7 @@ size_t ske_encrypt_file(const char* fnout, const char* fnin,
 	/* TODO: write this.  Hint: mmap. */
 	return 0;
 }
+
 size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		SKE_KEY* K)
 {
@@ -66,6 +90,7 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	 * for how to do basic decryption. */
 	return 0;
 }
+
 size_t ske_decrypt_file(const char* fnout, const char* fnin,
 		SKE_KEY* K, size_t offset_in)
 {
