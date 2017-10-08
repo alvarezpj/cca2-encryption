@@ -36,6 +36,7 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
 	/* TODO: write this.  If entropy is given, apply a KDF to it to get
 	 * the keys (something like HMAC-SHA512 with KDF_KEY will work).
 	 * If entropy is null, just get a random key (you can use the PRF). */
+<<<<<<< HEAD
 
 	 if(entropy == NULL){
         	size_t const KEY_LEN = 32;
@@ -54,11 +55,43 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
     	}
 
 	return 0;
+=======
+	
+    if(entropy == NULL)
+    {
+        unsigned char* buff = malloc(HM_LEN); 
+        // get hmacKey
+        randBytes(buff, HM_LEN);
+        memcpy((*K).hmacKey, buff, HM_LEN);
+         // get aesKey
+        randBytes(buff, HM_LEN);
+        memcpy((*K).aesKey, buff, HM_LEN);
+        
+        free(buff);
+    }
+    else
+    {
+        // allocate 64 bytes
+        unsigned char* keys = malloc(EVP_MAX_MD_SIZE);
+        // get 512-bit authentication code of entropy with KDF_KEY
+        HMAC(EVP_sha512(), &KDF_KEY, HM_LEN, entropy, entLen, keys, NULL);
+        // half of keys array corresponds to HMAC key
+        // the other half corresponds to AES key
+        memcpy((*K).hmacKey, keys, HM_LEN);
+        memcpy((*K).aesKey, keys + HM_LEN, HM_LEN);        
+
+        free(keys);
+    }
+
+    return 0;
+>>>>>>> 5185b22ec8024211a45c45494e5741c153c85e56
 }
+
 size_t ske_getOutputLen(size_t inputLen)
 {
 	return AES_BLOCK_SIZE + inputLen + HM_LEN;
 }
+
 size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		SKE_KEY* K, unsigned char* IV)
 {
@@ -90,6 +123,7 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
     	EVP_CIPHER_CTX_free(ctx);
 	return 0; /* TODO: should return number of bytes written, which
 	             hopefully matches ske_getOutputLen(...). */
+
 }
 size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned char* IV, size_t offset_out)
 {
@@ -101,7 +135,13 @@ size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned
 
 	return 0;
 }
+<<<<<<< HEAD
 size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,SKE_KEY* K)
+=======
+
+size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
+		SKE_KEY* K)
+>>>>>>> 5185b22ec8024211a45c45494e5741c153c85e56
 {
 	/* TODO: write this.  Make sure you check the mac before decypting!
 	 * Oh, and also, return -1 if the ciphertext is found invalid.
@@ -141,7 +181,13 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,SKE_K
 	EVP_CIPHER_CTX_free(ctx);
 	return 0;
 }
+<<<<<<< HEAD
 size_t ske_decrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, size_t offset_in)
+=======
+
+size_t ske_decrypt_file(const char* fnout, const char* fnin,
+		SKE_KEY* K, size_t offset_in)
+>>>>>>> 5185b22ec8024211a45c45494e5741c153c85e56
 {
 	/* TODO: write this. */
 
