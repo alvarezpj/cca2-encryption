@@ -36,6 +36,23 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
 	/* TODO: write this.  If entropy is given, apply a KDF to it to get
 	 * the keys (something like HMAC-SHA512 with KDF_KEY will work).
 	 * If entropy is null, just get a random key (you can use the PRF). */
+
+	 if(entropy == NULL){
+        	size_t const KEY_LEN = 32;
+        	unsigned char* buff = malloc(KEY_LEN); 
+        	// get hmacKey
+        	randBytes(buff, KEY_LEN);
+        	memcpy((*K).hmacKey, buff, KEY_LEN);
+        	 // get aesKey
+        	randBytes(buff, KEY_LEN);
+        	memcpy((*K).aesKey, buff, KEY_LEN);
+        
+        	free(buff);
+    	}else{
+         
+
+    	}
+
 	return 0;
 }
 size_t ske_getOutputLen(size_t inputLen)
@@ -48,27 +65,89 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	/* TODO: finish writing this.  Look at ctr_example() in aes-example.c
 	 * for a hint.  Also, be sure to setup a random IV if none was given.
 	 * You can assume outBuf has enough space for the result. */
+
+	size_t i;
+	len = strlen(inBuf);
+	int nWritten;
+	size_t outBufLen = nWritten;
+
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+
+	//initializing the encryption oparation
+	if (1!=EVP_EncryptInit_ex(ctx,EVP_aes_256_cbc(),0,(*K).hmacKey[len],randBytes(IV, len)))
+		ERR_print_errors_fp(stderr);
+
+	// Providing the plaintext to be encrypted
+	if (1!=EVP_EncryptUpdate(ctx,outBuf,nWritten,inBuf,len))
+		ERR_print_errors_fp(stderr);
+
+	for (i = 0; i < outBufLen; i++) {
+		fprintf(stderr, "%02x",outBuf[i]);
+	}
+	printf("The number of bytes writen is %i\n",nWritten ); // number of bytes witen
+
+	// free up the memory
+    	EVP_CIPHER_CTX_free(ctx);
 	return 0; /* TODO: should return number of bytes written, which
 	             hopefully matches ske_getOutputLen(...). */
 }
-size_t ske_encrypt_file(const char* fnout, const char* fnin,
-		SKE_KEY* K, unsigned char* IV, size_t offset_out)
+size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned char* IV, size_t offset_out)
 {
 	/* TODO: write this.  Hint: mmap. */
+
+	unsigned char *mapped_file = mmap (NULL, offset_out, PROT_READ , MAP_PRIVATE,fnin, 0); 
+
+	ske_encrypt(fnout, mapped_file, offset_out, (*k).hmacKey[offset_out],IV);
+
 	return 0;
 }
-size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
-		SKE_KEY* K)
+size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,SKE_KEY* K)
 {
 	/* TODO: write this.  Make sure you check the mac before decypting!
 	 * Oh, and also, return -1 if the ciphertext is found invalid.
 	 * Otherwise, return the number of bytes written.  See aes-example.c
 	 * for how to do basic decryption. */
+
+	size_t i;
+	int nWritten = 0;
+	size_t outBufLen = nWritten;
+
+	len = strlen(inBuf);
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+	
+
+	//Initialize the decription operation
+	if (1!=EVP_DecryptInit_ex(ctx,EVP_aes_256_ctr(),NULL,(*k).hmacKey[len],NULL))
+		ERR_print_errors_fp(stderr);
+
+	// providing the message to be decrypted
+	if (1!=EVP_DecryptUpdate(ctx,inBuf,&nWritten,outBuf,outBufLen))
+		ERR_print_errors_fp(stderr);
+
+	for (i = 0; i < outBufLen; i++) {
+			fprintf(stderr, "%02x",outBuf[i]);
+		}
+
+
+	if (!outBuf){ // if ciphertext invalid return -1
+		return -1;
+	}else{ // otherwise return number of bytes writen 
+		printf("%i\n",nWritten);
+	}
+
+	// fprintf(stderr, "%s\n",inBuf);
+
+
+	EVP_CIPHER_CTX_free(ctx);
 	return 0;
 }
-size_t ske_decrypt_file(const char* fnout, const char* fnin,
-		SKE_KEY* K, size_t offset_in)
+size_t ske_decrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, size_t offset_in)
 {
 	/* TODO: write this. */
+
+	unsigned char *mapped_file = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
+
+	ske_decrypt(mapped_file, fnin, offset_in, (*k).hmacKey[offset_in]);
+
 	return 0;
 }
