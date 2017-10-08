@@ -39,21 +39,28 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
 	
     if(entropy == NULL)
     {
-        size_t const KEY_LEN = 32;
-        unsigned char* buff = malloc(KEY_LEN); 
+        unsigned char* buff = malloc(HM_LEN); 
         // get hmacKey
-        randBytes(buff, KEY_LEN);
-        memcpy((*K).hmacKey, buff, KEY_LEN);
+        randBytes(buff, HM_LEN);
+        memcpy((*K).hmacKey, buff, HM_LEN);
          // get aesKey
-        randBytes(buff, KEY_LEN);
-        memcpy((*K).aesKey, buff, KEY_LEN);
+        randBytes(buff, HM_LEN);
+        memcpy((*K).aesKey, buff, HM_LEN);
         
         free(buff);
     }
     else
     {
-         
+        // allocate 64 bytes
+        unsigned char* keys = malloc(EVP_MAX_MD_SIZE);
+        // get 512-bit authentication code of entropy with KDF_KEY
+        HMAC(EVP_sha512(), &KDF_KEY, HM_LEN, entropy, entLen, keys, NULL);
+        // half of keys array corresponds to HMAC key
+        // the other half corresponds to AES key
+        memcpy((*K).hmacKey, keys, HM_LEN);
+        memcpy((*K).aesKey, keys + HM_LEN, HM_LEN);        
 
+        free(keys);
     }
 
     return 0;
