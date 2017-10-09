@@ -57,37 +57,37 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
 	 * the right length, and then test for primality (see the ISPRIME
 	 * macro above).  Once you've found the primes, set up the other
 	 * pieces of the key ({en,de}crypting exponents, and n=pq). */
-    mpz_t phi, temp1, temp2;
-    mpz_inits(phi, temp1, temp2, NULL);	
-    size_t factorBytes = keyBits / 16;		
-    unsigned char* buf = malloc(factorBytes);
+        mpz_t phi, temp1, temp2;
+        mpz_inits(phi, temp1, temp2, NULL);	
+        size_t factorBytes = keyBits / 16;		
+        unsigned char* buf = malloc(factorBytes);
 
-    // generate p 
-    randBytes(buf, factorBytes);
-    BYTES2Z(temp1, buf, factorBytes);	
+        // generate p 
+        randBytes(buf, factorBytes);
+        BYTES2Z(temp1, buf, factorBytes);	
 	if(ISPRIME(temp1) != 2)
-	    mpz_nextprime(temp1, temp1);
+	        mpz_nextprime(temp1, temp1);
 	mpz_set((*K).p, temp1);
 	
 	// generate q
 	randBytes(buf, factorBytes);
-    BYTES2Z(temp2, buf, factorBytes);	
+        BYTES2Z(temp2, buf, factorBytes);	
 	if(ISPRIME(temp2) != 2)
-	    mpz_nextprime(temp2, temp2);
+	        mpz_nextprime(temp2, temp2);
 	mpz_set((*K).q, temp2);
 
 	// compute n
 	mpz_mul((*K).n, temp1, temp2);
 
 	// generate e
-    mpz_sub_ui(temp1, temp1, 1);
-    mpz_sub_ui(temp2, temp2, 1);
-    mpz_mul(phi, temp1, temp2);
-    mpz_set_ui(temp1, 1);
-    do
+        mpz_sub_ui(temp1, temp1, 1);
+        mpz_sub_ui(temp2, temp2, 1);
+        mpz_mul(phi, temp1, temp2);
+        mpz_set_ui(temp1, 1);
+        do
 	{
-	    mpz_add_ui(temp1, temp1, 1);
-        mpz_gcd(temp2, phi, temp1);
+	        mpz_add_ui(temp1, temp1, 1);
+                mpz_gcd(temp2, phi, temp1);
 	} while(mpz_cmp_ui(temp2, 1) != 0);		
 	mpz_set((*K).e, temp1);
 
@@ -95,7 +95,8 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
 	mpz_invert((*K).d, temp1, phi);
 
 	free(buf);
-    mpz_clears(phi, temp1, temp2, NULL);	
+        mpz_clears(phi, temp1, temp2, NULL);	
+
 	return 0;
 }
 
@@ -107,7 +108,7 @@ size_t rsa_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
         size_t bw;
 	mpz_t ct, pt;
 	mpz_inits(ct, pt, NULL);
-    BYTES2Z(pt, inBuf, len);
+        BYTES2Z(pt, inBuf, len);
 	mpz_powm(ct, pt, (*K).e, (*K).n);
 	Z2BYTES(outBuf, bw, ct);
 	mpz_clears(ct, pt, NULL);
