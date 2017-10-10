@@ -82,7 +82,7 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
         // setup a random initialization vector (IV) if none is given
         if(IV == NULL)
         {
-                unsigned char* IV = malloc(AES_BLOCK_SIZE);
+                IV = malloc(AES_BLOCK_SIZE);
                 randBytes(IV, AES_BLOCK_SIZE);
         }
 
@@ -119,32 +119,35 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 	 * Otherwise, return the number of bytes written.  See aes-example.c
 	 * for how to do basic decryption. */
 
-/*	int nWritten;
+	// compute and check mac
+	unsigned char* mac = malloc(HM_LEN);	
+	HMAC(EVP_sha256(), (*K).hmacKey, HM_LEN, inBuf, len, mac, NULL); 
+        unsigned char* inBufMac = malloc(HM_LEN);
+	memcpy(inBufMac, inBuf + len - HM_LEN, HM_LEN);
+	if(0 != memcmp(mac, inBufMac, HM_LEN))
+		return -1;
+
+	int nWritten;
 	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();	
 
+	// extract IV 
+	unsigned char* IV = malloc(AES_BLOCK_SIZE);
+	memcpy(IV, inBuf, AES_BLOCK_SIZE);
+
 	// setup ctx for decryption
-	if(1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, (*k).aesKey, NULL))
+	if(1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, (*K).aesKey, IV))
 		ERR_print_errors_fp(stderr);
 
-	// providing the message to be decrypted
-	if (1!=EVP_DecryptUpdate(ctx,inBuf,&nWritten,outBuf,outBufLen))
+	// do the actual decryption
+	if(1 != EVP_DecryptUpdate(ctx, outBuf, &nWritten, inBuf, len))
 		ERR_print_errors_fp(stderr);
 
-	for (i = 0; i < outBufLen; i++) {
-			fprintf(stderr, "%02x",outBuf[i]);
-		}
+        // free up the memory
+        free(mac);
+	free(IV);
+	free(inBufMac);
+	EVP_CIPHER_CTX_free(ctx); 
 
-
-	if (!outBuf){ // if ciphertext invalid return -1
-		return -1;
-	}else{ // otherwise return number of bytes writen 
-		printf("%i\n",nWritten);
-	}
-
-	// fprintf(stderr, "%s\n",inBuf);
-
-
-	EVP_CIPHER_CTX_free(ctx);*/ 
 	return 0;
 }
 
