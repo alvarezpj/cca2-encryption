@@ -87,17 +87,28 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
         }
 
 	int nWritten;
+        unsigned char* c = malloc(len);
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 	// setup context ctx for encryption
 	if(1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, (*K).aesKey, IV))
 	        ERR_print_errors_fp(stderr);
 	// do the actual encryption
-	if(1 != EVP_EncryptUpdate(ctx, outBuf, &nWritten, inBuf, len))
-		ERR_print_errors_fp(stderr);
-	// free up the memory
+	if(1 != EVP_EncryptUpdate(ctx, c, &nWritten, inBuf, len))
+		ERR_print_errors_fp(stderr);	
+
+        // setup outBuf 
+        unsigned char* tempBuf = malloc(AES_BLOCK_SIZE + nWritten + HM_LEN);
+        memcpy(tempBuf, IV, AES_BLOCK_SIZE); 
+        memcpy(tempBuf + AES_BLOCK_SIZE, c, nWritten); 
+        HMAC(EVP_sha256(), (*K).hmacKey, HM_LEN, c, nWritten, tempBuf + AES_BLOCK_SIZE + nWritten, NULL); 
+        memcpy(outBuf, tempBuf, AES_BLOCK_SIZE + nWritten + HM_LEN);
+
+        // free up the memory
+        free(c);
+        free(tempBuf);
     	EVP_CIPHER_CTX_free(ctx);
 
-	return nWritten; /* TODO: should return number of bytes written, which
+	return (AES_BLOCK_SIZE + nWritten + HM_LEN); /* TODO: should return number of bytes written, which
 	             hopefully matches ske_getOutputLen(...). */
 }
 
@@ -122,9 +133,7 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 	// compute and check mac
 	unsigned char* mac = malloc(HM_LEN);	
 	HMAC(EVP_sha256(), (*K).hmacKey, HM_LEN, inBuf, len, mac, NULL); 
-        unsigned char* inBufMac = malloc(HM_LEN);
-	memcpy(inBufMac, inBuf + len - HM_LEN, HM_LEN);
-	if(0 != memcmp(mac, inBufMac, HM_LEN))
+	if(0 != memcmp(mac, inBuf + len - HM_LEN, HM_LEN))
 		return -1;
 
 	int nWritten;
@@ -145,7 +154,6 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
         // free up the memory
         free(mac);
 	free(IV);
-	free(inBufMac);
 	EVP_CIPHER_CTX_free(ctx); 
 
 	return 0;
