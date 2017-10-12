@@ -116,7 +116,7 @@ size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned
 {
 	/* TODO: write this.  Hint: mmap. */
 
-	//char fileE = mmap (NULL, offset_out, PROT_READ , MAP_PRIVATE,fnin, 0); 
+	//char* fileE = mmap (NULL, offset_out, PROT_READ , MAP_PRIVATE,fnin, 0); 
 
 	//ske_encrypt(fnout, fileE, offset_out, (*k).easKey,IV);
 
@@ -163,7 +163,7 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, size_t o
 {
 	/* TODO: write this. */
 
-//	char fileD = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
+//	char* fileD = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
 
 //	ske_decrypt(fileD, fnin, offset_in, (*k).aesKey);
 
