@@ -27,6 +27,7 @@
  * */
 
 /* we'll use hmac with sha256, which produces 32 byte output */
+#define IV_LEN 16 
 #define HM_LEN 32
 #define KDF_KEY "qVHqkOVJLb7EolR9dsAMVwH1hRCYVx#I"
 /* need to make sure KDF is orthogonal to other hash functions, like
@@ -40,27 +41,30 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
 	
         if(entropy == NULL)
         {
-                unsigned char* buff = malloc(HM_LEN); 
-                // get hmacKey
-                randBytes(buff, HM_LEN);
-                memcpy((*K).hmacKey, buff, HM_LEN);
-                // get aesKey
-                randBytes(buff, HM_LEN);
-                memcpy((*K).aesKey, buff, HM_LEN);
-        
+                // generate random aesKey and hmacKey
+                // half of buff array corresponds to HMAC key
+                // the other half corresponds to AES key
+                unsigned char* buff = malloc(64); 
+                randBytes(buff, 64);               
+                memcpy((*K).aesKey, buff, 32); 
+                memcpy((*K).hmacKey, buff + 32, 32); 
                 free(buff);
         }
         else
         {
-                // allocate 64 bytes
-                unsigned char* keys = malloc(EVP_MAX_MD_SIZE);
+		unsigned int md_len;
+                unsigned char* keys = malloc(64);
                 // get 512-bit authentication code of entropy with KDF_KEY
-                HMAC(EVP_sha512(), &KDF_KEY, HM_LEN, entropy, entLen, keys, NULL);
+                HMAC_CTX* mctx = HMAC_CTX_new();
+	        HMAC_Init_ex(mctx, &KDF_KEY, 32, EVP_sha512(), 0);
+	        HMAC_Update(mctx, entropy, entLen); 	
+		HMAC_Final(mctx, keys, &md_len); 
+		HMAC_CTX_free(mctx);
+		printf("%d \n", md_len);
                 // half of keys array corresponds to HMAC key
                 // the other half corresponds to AES key
-                memcpy((*K).hmacKey, keys, HM_LEN);
-                memcpy((*K).aesKey, keys + HM_LEN, HM_LEN);        
-
+                memcpy((*K).aesKey, keys, 32); 
+                memcpy((*K).hmacKey, keys + 32, 32);
                 free(keys);
         }
 
@@ -82,40 +86,71 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
         // setup a random initialization vector (IV) if none is given
         if(IV == NULL)
         {
-                IV = malloc(AES_BLOCK_SIZE);
-                randBytes(IV, AES_BLOCK_SIZE);
+                IV = malloc(IV_LEN);
+                randBytes(IV, IV_LEN);
         }
-
-	int nWritten;
-        unsigned char* c = malloc(len);
-        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+	
 	// setup context ctx for encryption
-	if(1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, (*K).aesKey, IV))
+        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+	if(0 == EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), 0, (*K).aesKey, IV))
 	        ERR_print_errors_fp(stderr);
 	// do the actual encryption
-	if(1 != EVP_EncryptUpdate(ctx, c, &nWritten, inBuf, len))
+	int nWritten;
+        unsigned char* ct = malloc(len);
+	if(0 == EVP_EncryptUpdate(ctx, ct, &nWritten, inBuf, len))
 		ERR_print_errors_fp(stderr);	
 
-        // setup outBuf 
-        unsigned char* tempBuf = malloc(AES_BLOCK_SIZE + nWritten + HM_LEN);
-        memcpy(tempBuf, IV, AES_BLOCK_SIZE); 
-        memcpy(tempBuf + AES_BLOCK_SIZE, c, nWritten); 
-        HMAC(EVP_sha256(), (*K).hmacKey, HM_LEN, c, nWritten, tempBuf + AES_BLOCK_SIZE + nWritten, NULL); 
-        memcpy(outBuf, tempBuf, AES_BLOCK_SIZE + nWritten + HM_LEN);
+	// free up cipher context
+        EVP_CIPHER_CTX_free(ctx); 
 
-        // free up the memory
-        free(c);
-        free(tempBuf);
-    	EVP_CIPHER_CTX_free(ctx);
+	// compute hmac of IV + ct
+	unsigned char* iv_ct = malloc(IV_LEN + nWritten);
+	memcpy(iv_ct, IV, IV_LEN);
+	unsigned char* ct_start = iv_ct + IV_LEN;
+	memcpy(ct_start, ct, nWritten);
+        unsigned int md_len = 32;
+        unsigned char* md = malloc(md_len);
+	HMAC_CTX* mctx = HMAC_CTX_new();
+	HMAC_Init_ex(mctx, (*K).hmacKey, 32, EVP_sha256(), 0);
+	HMAC_Update(mctx, iv_ct, IV_LEN + nWritten);
+	HMAC_Final(mctx, md, &md_len);
+	HMAC_CTX_free(mctx);
+	
+        //assemble message for specified format
+	unsigned char* iv_ct_hmac = malloc(IV_LEN + nWritten + HM_LEN);
+        unsigned char* hmac_start = iv_ct_hmac + IV_LEN + nWritten;
+	memcpy(iv_ct_hmac, iv_ct, IV_LEN + nWritten);
+	memcpy(hmac_start, md, md_len);
+        
+	// copy to outBuf
+	memcpy(outBuf, iv_ct_hmac, IV_LEN + nWritten + HM_LEN);
 
-	return (AES_BLOCK_SIZE + nWritten + HM_LEN); /* TODO: should return number of bytes written, which
-	             hopefully matches ske_getOutputLen(...). */
+	// free up heap memory
+	free(ct);
+	free(iv_ct);
+ 	free(md);
+        free(iv_ct_hmac);
+//	printf("%d \n", md_len);
+/*	unsigned char* tempBuf = malloc(AES_BLOCK_SIZE + len + HM_LEN);
+       	unsigned char* tempMac = malloc(HM_LEN);
+	HMAC(EVP_sha256(), (*K).hmacKey, HM_LEN, c, len, tempMac, NULL);
+
+	memcpy(tempBuf, IV, AES_BLOCK_SIZE);
+	memcpy(tempBuf + AES_BLOCK_SIZE, c, len);
+	memcpy(tempBuf + AES_BLOCK_SIZE + len, tempMac, HM_LEN); 
+
+        memcpy(outBuf, tempBuf, AES_BLOCK_SIZE + nWritten + HM_LEN);	
+
+	free(c);
+	free(tempBuf);
+	free(tempMac);*/
+	return (IV_LEN + nWritten + HM_LEN); //(AES_BLOCK_SIZE + nWritten + HM_LEN); /* TODO: should return number of bytes written, which
+	      //       hopefully matches ske_getOutputLen(...). */
 }
 
 size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned char* IV, size_t offset_out)
 {
-	/* TODO: write this.  Hint: mmap. */
-
+	/* TODO: write this.  Hint: mmap. */ 
 	//unsigned char *mapped_file = mmap (NULL, offset_out, PROT_READ , MAP_PRIVATE,fnin, 0); 
 
 	//ske_encrypt(fnout, mapped_file, offset_out, (*k).hmacKey[offset_out],IV);
@@ -131,24 +166,36 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 	 * for how to do basic decryption. */
 
 	// compute and check mac
+	// compute hmac of IV + ct
+/*	unsigned char* iv_ct = malloc();
+	memcpy(iv_ct, inBuf, len - HM_LEN);
+	unsigned char* ct_start = iv_ct + IV_LEN;
+	memcpy(ct_start, ct, nWritten);
+        unsigned int md_len = 32;
+        unsigned char* md = malloc(md_len);
+	HMAC_CTX* mctx = HMAC_CTX_new();
+	HMAC_Init_ex(mctx, (*K).hmacKey, 32, EVP_sha256(), 0);
+	HMAC_Update(mctx, iv_ct, IV_LEN + nWritten);
+	HMAC_Final(mctx, md, &md_len);
+	HMAC_CTX_free(mctx);*/
+
 	unsigned char* mac = malloc(HM_LEN);	
-	HMAC(EVP_sha256(), (*K).hmacKey, HM_LEN, inBuf, len, mac, NULL); 
+	HMAC(EVP_sha256(), (*K).hmacKey, 32, inBuf, len - HM_LEN, mac, NULL); 
 	if(0 != memcmp(mac, inBuf + len - HM_LEN, HM_LEN))
 		return -1;
 
-	int nWritten;
-	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();	
-
 	// extract IV 
-	unsigned char* IV = malloc(AES_BLOCK_SIZE);
-	memcpy(IV, inBuf, AES_BLOCK_SIZE);
+	unsigned char* IV = malloc(IV_LEN);
+	memcpy(IV, inBuf, IV_LEN);
 
 	// setup ctx for decryption
+	int nWritten;
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();	
 	if(1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, (*K).aesKey, IV))
 		ERR_print_errors_fp(stderr);
 
 	// do the actual decryption
-	if(1 != EVP_DecryptUpdate(ctx, outBuf, &nWritten, inBuf, len))
+	if(1 != EVP_DecryptUpdate(ctx, outBuf, &nWritten, inBuf + IV_LEN, len - IV_LEN - HM_LEN))
 		ERR_print_errors_fp(stderr);
 
         // free up the memory
@@ -169,3 +216,4 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, size_t o
 
 	return 0;
 }
+
