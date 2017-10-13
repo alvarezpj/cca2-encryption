@@ -115,10 +115,19 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned char* IV, size_t offset_out)
 {
 	/* TODO: write this.  Hint: mmap. */
+    // length of the file 
+	
+    FIle *file=fopen(fnin,"r");
+	fseek(file,0,SEEK_END);
+	offset_out=ftell(file);
+	
+    //char *buf = malloc(AES_BLOCK_SIZE)
+	
 
-	//char* fileE = mmap (NULL, offset_out, PROT_READ , MAP_PRIVATE,fnin, 0); 
 
-	//ske_encrypt(fnout, fileE, offset_out, (*k).easKey,IV);
+	char *file = mmap (NULL, offset_out, PROT_WRITE , MAP_PRIVATE,fnin, 0); 
+
+	ske_encrypt(fnout, file, offset_out, (*k).easKey,IV);
 
 	return 0;
 }
@@ -162,10 +171,14 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 size_t ske_decrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, size_t offset_in)
 {
 	/* TODO: write this. */
+    /* TODO: write this. */
+	FIle *file=fopen(fnout,"r");
+	fseek(file,0,SEEK_END);
+	offset_in=ftell(file);
 
-//	char* fileD = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
+    char *file = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
 
-//	ske_decrypt(fileD, fnin, offset_in, (*k).aesKey);
+    ske_decrypt(file, fnin, offset_in, (*k).easKey);
 
 	return 0;
 }
