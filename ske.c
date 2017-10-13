@@ -130,30 +130,25 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	free(iv_ct);
  	free(md);
         free(iv_ct_hmac);
-//	printf("%d \n", md_len);
-/*	unsigned char* tempBuf = malloc(AES_BLOCK_SIZE + len + HM_LEN);
-       	unsigned char* tempMac = malloc(HM_LEN);
-	HMAC(EVP_sha256(), (*K).hmacKey, HM_LEN, c, len, tempMac, NULL);
-
-	memcpy(tempBuf, IV, AES_BLOCK_SIZE);
-	memcpy(tempBuf + AES_BLOCK_SIZE, c, len);
-	memcpy(tempBuf + AES_BLOCK_SIZE + len, tempMac, HM_LEN); 
-
-        memcpy(outBuf, tempBuf, AES_BLOCK_SIZE + nWritten + HM_LEN);	
-
-	free(c);
-	free(tempBuf);
-	free(tempMac);*/
-	return (IV_LEN + nWritten + HM_LEN); //(AES_BLOCK_SIZE + nWritten + HM_LEN); /* TODO: should return number of bytes written, which
+	return (IV_LEN + nWritten + HM_LEN); /* TODO: should return number of bytes written, which
 	      //       hopefully matches ske_getOutputLen(...). */
 }
 
 size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned char* IV, size_t offset_out)
 {
+<<<<<<< HEAD
 	/* TODO: write this.  Hint: mmap. */ 
 	//unsigned char *mapped_file = mmap (NULL, offset_out, PROT_READ , MAP_PRIVATE,fnin, 0); 
+=======
+        // length of the file 	
+        FIle *file=fopen(fnin,"r");
+	fseek(file,0,SEEK_END);
+	offset_out=ftell(file);
+	
+	char *file = mmap (NULL, offset_out, PROT_WRITE , MAP_PRIVATE,fnin, 0); 
+>>>>>>> 97b9f7f3530c4727b2f6d33cbfc363befe6947c2
 
-	//ske_encrypt(fnout, mapped_file, offset_out, (*k).hmacKey[offset_out],IV);
+	ske_encrypt(fnout, file, offset_out, (*k).easKey,IV);
 
 	return 0;
 }
@@ -165,20 +160,7 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 	 * Otherwise, return the number of bytes written.  See aes-example.c
 	 * for how to do basic decryption. */
 
-	// compute and check mac
 	// compute hmac of IV + ct
-/*	unsigned char* iv_ct = malloc();
-	memcpy(iv_ct, inBuf, len - HM_LEN);
-	unsigned char* ct_start = iv_ct + IV_LEN;
-	memcpy(ct_start, ct, nWritten);
-        unsigned int md_len = 32;
-        unsigned char* md = malloc(md_len);
-	HMAC_CTX* mctx = HMAC_CTX_new();
-	HMAC_Init_ex(mctx, (*K).hmacKey, 32, EVP_sha256(), 0);
-	HMAC_Update(mctx, iv_ct, IV_LEN + nWritten);
-	HMAC_Final(mctx, md, &md_len);
-	HMAC_CTX_free(mctx);*/
-
 	unsigned char* mac = malloc(HM_LEN);	
 	HMAC(EVP_sha256(), (*K).hmacKey, 32, inBuf, len - HM_LEN, mac, NULL); 
 	if(0 != memcmp(mac, inBuf + len - HM_LEN, HM_LEN))
@@ -209,10 +191,12 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 size_t ske_decrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, size_t offset_in)
 {
 	/* TODO: write this. */
+	FIle *file=fopen(fnout,"r");
+	fseek(file,0,SEEK_END);
+	offset_in=ftell(file);
 
-//	unsigned char *mapped_file = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
-
-//	ske_decrypt(mapped_file, fnin, offset_in, (*k).hmacKey[offset_in]);
+        char *file = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
+        ske_decrypt(file, fnin, offset_in, (*k).easKey);
 
 	return 0;
 }
