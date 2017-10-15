@@ -52,15 +52,14 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
         }
         else
         {
+                // get 512-bit authentication code of entropy with KDF_KEY
 		unsigned int md_len;
                 unsigned char* keys = malloc(64);
-                // get 512-bit authentication code of entropy with KDF_KEY
                 HMAC_CTX* mctx = HMAC_CTX_new();
 	        HMAC_Init_ex(mctx, &KDF_KEY, 32, EVP_sha512(), 0);
 	        HMAC_Update(mctx, entropy, entLen); 	
 		HMAC_Final(mctx, keys, &md_len); 
 		HMAC_CTX_free(mctx);
-		printf("%d \n", md_len);
                 // half of keys array corresponds to HMAC key
                 // the other half corresponds to AES key
                 memcpy((*K).aesKey, keys, 32); 
@@ -134,22 +133,55 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	      //       hopefully matches ske_getOutputLen(...). */
 }
 
-size_t ske_encrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, unsigned char* IV, size_t offset_out)
+size_t ske_encrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, unsigned char* IV, size_t offset_out)
 {
-<<<<<<< HEAD
-	/* TODO: write this.  Hint: mmap. */ 
-	//unsigned char *mapped_file = mmap (NULL, offset_out, PROT_READ , MAP_PRIVATE,fnin, 0); 
-=======
-        // length of the file 	
-        FIle *file=fopen(fnin,"r");
-	fseek(file,0,SEEK_END);
-	offset_out=ftell(file);
-	
-	char *file = mmap (NULL, offset_out, PROT_WRITE , MAP_PRIVATE,fnin, 0); 
->>>>>>> 97b9f7f3530c4727b2f6d33cbfc363befe6947c2
-
-	ske_encrypt(fnout, file, offset_out, (*k).easKey,IV);
-
+	/* TODO: write this.  Hint: mmap. */
+	// open input and output files. If output file does not exist, create it
+        int fd_fnin, fd_fnout;
+	fd_fnin = open(fnin, O_RDONLY);
+	if(-1 == fd_fnin)
+        {
+		perror("open(fnin, O_RDONLY)");
+		exit(EXIT_FAILURE);
+	}
+        fd_fnout = open(fnout, O_RDWR | O_CREAT, (mode_t)0644);
+	if(-1 == fd_fnout)
+	{
+		close(fd_fnin);
+		perror("open(fnout, O_RDWR | O_CREAT, (mode_t)0644)");
+		exit(EXIT_FAILURE);
+	}
+	// get status information of opened files
+        struct stat stat_fnin;
+        if(0 != fstat(fd_fnin, &stat_fnin))
+	{
+		close(fd_fnin);
+		close(fd_fnout);
+		perror("fstat(fd_fnin, &stat_fnin)");
+		exit(EXIT_FAILURE);
+	}	
+	// map input file to memory 
+	void* mmp_fnin = mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, 0);
+	if(mmp_fnin == MAP_FAILED)
+	{
+		close(fd_fnin);
+		close(fd_fnout);
+		perror("mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, 0)");
+		exit(EXIT_FAILURE);
+	}
+   	int outLen = ske_getOutputLen(stat_fnin.st_size);
+	unsigned char* buff = malloc(outLen);
+	// do the encryption
+	ske_encrypt(buff, (unsigned char*)mmp_fnin, stat_fnin.st_size, K, IV); 
+        // write to disk
+	lseek(fd_fnout, (off_t) offset_out, SEEK_SET);
+        write(fd_fnout, buff, outLen);
+	free(buff);
+	// unmap and close files
+        munmap(mmp_fnin, stat_fnin.st_size);
+        close(fd_fnin);
+	close(fd_fnout);
+			
 	return 0;
 }
 
@@ -188,15 +220,53 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 	return 0;
 }
 
-size_t ske_decrypt_file(const char* fnout, const char* fnin,SKE_KEY* K, size_t offset_in)
+size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t offset_in)
 {
 	/* TODO: write this. */
-	FIle *file=fopen(fnout,"r");
-	fseek(file,0,SEEK_END);
-	offset_in=ftell(file);
-
-        char *file = mmap (NULL, offset_in, PROT_READ , MAP_PRIVATE,fnout, 0); 
-        ske_decrypt(file, fnin, offset_in, (*k).easKey);
+	// open input and output files. If output file does not exist, create it
+        int fd_fnin, fd_fnout;
+	fd_fnin = open(fnin, O_RDONLY);
+	if(-1 == fd_fnin)
+	{
+		perror("open(fnin, O_RDONLY)");
+		exit(EXIT_FAILURE);
+	}
+        fd_fnout = open(fnout, O_RDWR | O_CREAT, (mode_t)0644);
+	if(-1 == fd_fnout)
+	{
+		close(fd_fnin);
+		perror("open(fnout, O_RDWR | O_CREAT, (mode_t)0644)");
+		exit(EXIT_FAILURE);
+	}
+	// get status information of opened files
+        struct stat stat_fnin;
+	if(0 != fstat(fd_fnin, &stat_fnin))
+	{
+                close(fd_fnin);
+		close(fd_fnout);
+		perror("fstat(fd_fnin, &stat_fnin)");
+		exit(EXIT_FAILURE);
+	}
+       	/* map opened files to memory */
+	void* mmp_fnin = mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, offset_in);
+	if(mmp_fnin == MAP_FAILED)
+	{
+		close(fd_fnin);
+		close(fd_fnout);
+		perror("mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, 0)");
+		exit(EXIT_FAILURE);
+	}
+	int outLen = stat_fnin.st_size - IV_LEN - HM_LEN;
+	unsigned char* buff = malloc(outLen);
+	/* do the decryption */
+	ske_decrypt(buff, (unsigned char*)mmp_fnin, stat_fnin.st_size, K); 
+        // write to file
+        write(fd_fnout, buff, outLen);
+	free(buff);
+	// unmap and close files
+        munmap(mmp_fnin, stat_fnin.st_size);
+        close(fd_fnin);
+	close(fd_fnout);
 
 	return 0;
 }

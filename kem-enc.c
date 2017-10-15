@@ -64,7 +64,7 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	// fseek(file,0,SEEK_END);
 	// size_t len=ftell(file);
 	
-	struct st ms;
+/*	struct st ms;
 	int filed =open(fnIn, O_RDWR);
 	if(filed == -1 ){
 		 ERR_print_errors_fp(stderr);
@@ -86,7 +86,7 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	//encrypt fnIn with SK
 	ske_encrypt_file(fnOut, fnIn, &SK, NULL, len);
 
-
+*/
 	//concatenate encapsulation and cihpertext;
 
 
