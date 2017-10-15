@@ -66,14 +66,14 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
         randBytes(buf, factorBytes);
         BYTES2Z(temp1, buf, factorBytes);	
 	if(ISPRIME(temp1) != 2)
-	    mpz_nextprime(temp1, temp1);
+	        mpz_nextprime(temp1, temp1);
 	mpz_set((*K).p, temp1);
 	
 	// generate q
 	randBytes(buf, factorBytes);
         BYTES2Z(temp2, buf, factorBytes);	
 	if(ISPRIME(temp2) != 2)
-	    mpz_nextprime(temp2, temp2);
+	        mpz_nextprime(temp2, temp2);
 	mpz_set((*K).q, temp2);
 
 	// compute n
@@ -86,8 +86,8 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
         mpz_set_ui(temp1, 1);
         do
 	{
-	    mpz_add_ui(temp1, temp1, 1);
-            mpz_gcd(temp2, phi, temp1);
+	        mpz_add_ui(temp1, temp1, 1);
+                mpz_gcd(temp2, phi, temp1);
 	} while(mpz_cmp_ui(temp2, 1) != 0);		
 	mpz_set((*K).e, temp1);
 
@@ -96,6 +96,7 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
 
 	free(buf);
         mpz_clears(phi, temp1, temp2, NULL);	
+
 	return 0;
 }
 
