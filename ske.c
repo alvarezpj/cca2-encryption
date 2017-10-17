@@ -156,16 +156,40 @@ size_t ske_encrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, unsigne
 		perror("mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, 0)");
 		exit(EXIT_FAILURE);
 	}
+        // increase size of output file
    	int outLen = ske_getOutputLen(stat_fnin.st_size);
-	unsigned char* buff = malloc(outLen);
-	// do the encryption
-	ske_encrypt(buff, (unsigned char*)mmp_fnin, stat_fnin.st_size, K, IV); 
-        // write to disk
-	lseek(fd_fnout, (off_t) offset_out, SEEK_SET);
-        write(fd_fnout, buff, outLen);
-	free(buff);
+        if(0 != ftruncate(fd_fnout, (off_t) offset_out + outLen))
+        {
+                close(fd_fnin);
+                close(fd_fnout);
+                munmap(mmp_fnin, stat_fnin.st_size); 
+                perror("ftruncate(fd_fnout, (off_t) offset_out + outLen)");
+                exit(EXIT_FAILURE);
+        }		
+        // map output file to memory
+        void* mmp_fnout = mmap(0, outLen, PROT_WRITE, MAP_SHARED, fd_fnout, (off_t)offset_out);
+	if(mmp_fnout == MAP_FAILED)
+	{
+		close(fd_fnin);
+		close(fd_fnout);
+                munmap(mmp_fnin, stat_fnin.st_size);
+		perror("mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, 0)");
+		exit(EXIT_FAILURE);
+	}
+        // do the encryption
+	ske_encrypt((unsigned char*)mmp_fnout, (unsigned char*)mmp_fnin, stat_fnin.st_size, K, IV); 
+        // write changes to disk
+        if(0 != msync(mmp_fnout, outLen, MS_SYNC))
+        {
+		close(fd_fnin);
+		close(fd_fnout);
+                munmap(mmp_fnin, stat_fnin.st_size);
+                perror("msync(mmp_fnout, outLen, MS_SYNC)");
+                exit(EXIT_FAILURE);
+        } 
 	// unmap and close files
         munmap(mmp_fnin, stat_fnin.st_size);
+        munmap(mmp_fnout, outLen);
         close(fd_fnin);
 	close(fd_fnout);
 			
@@ -234,24 +258,50 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t 
 		perror("fstat(fd_fnin, &stat_fnin)");
 		exit(EXIT_FAILURE);
 	}
-       	/* map opened files to memory */
-	void* mmp_fnin = mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, offset_in);
+       	// map input file to memory 
+	void* mmp_fnin = mmap(0, stat_fnin.st_size - offset_in, PROT_READ, MAP_SHARED, fd_fnin, (off_t)offset_in);
 	if(mmp_fnin == MAP_FAILED)
 	{
 		close(fd_fnin);
 		close(fd_fnout);
-		perror("mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, 0)");
+		perror("mmap(0, stat_fnin.st_size - offset_in, PROT_READ, MAP_SHARED, fd_fnin, (off_t)offset_in)");
 		exit(EXIT_FAILURE);
 	}
+        // truncate output file
 	int outLen = stat_fnin.st_size - IV_LEN - HM_LEN;
-	unsigned char* buff = malloc(outLen);
-	/* do the decryption */
-	ske_decrypt(buff, (unsigned char*)mmp_fnin, stat_fnin.st_size, K); 
+        if(0 != ftruncate(fd_fnout, outLen))
+        {
+                close(fd_fnin);
+                close(fd_fnout);
+                munmap(mmp_fnin, stat_fnin.st_size);
+                perror("ftruncate(fd_fnout, outLen)");
+                exit(EXIT_FAILURE);
+        }
+        // map output file to memory
+        void* mmp_fnout = mmap(0, outLen, PROT_WRITE, MAP_SHARED, fd_fnout, (off_t) 0);
+        if(mmp_fnout == MAP_FAILED)
+	{
+		close(fd_fnin);
+		close(fd_fnout);
+                munmap(mmp_fnin, stat_fnin.st_size);
+		perror("mmap(0, outLen, PROT_WRITE, MAP_SHARED, fd_fnout, (off_t)0)");
+		exit(EXIT_FAILURE);
+	}
+	// do the decryption 
+	ske_decrypt((unsigned char*)mmp_fnout, (unsigned char*)mmp_fnin, stat_fnin.st_size, K); 
         // write to file
-        write(fd_fnout, buff, outLen);
-	free(buff);
+        if(0 != msync(mmp_fnout, outLen, MS_SYNC))
+        {
+                close(fd_fnin);
+                close(fd_fnout);
+                munmap(mmp_fnin, stat_fnin.st_size);
+                munmap(mmp_fnout, outLen);
+                perror("msync(mmp_fnout, outLen, MS_SYNC)");
+                exit(EXIT_FAILURE);
+        }
 	// unmap and close files
         munmap(mmp_fnin, stat_fnin.st_size);
+        munmap(mmp_fnout, outLen);
         close(fd_fnin);
 	close(fd_fnout);
 
