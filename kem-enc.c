@@ -53,7 +53,31 @@ enum modes {
 #define HASHLEN 32 /* for sha256 */
 
 int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
-{
+{	
+	// generating 32 byte random number for the KDF argument  
+	unsigned char* x=malloc(HASHLEN);
+	int randomData= open("/dev/urandom",O_RDONLY);
+ 	if(read(rabdomData,x,HASHLEN)!=HASHLEN)
+	printf("Error Occured");
+	close(randomData);
+
+	size_t rsa_out_length = mpz_size(K->n)*sizeof(mp_limb_size); 
+	unsigned char* rsa_out_buffer=malloc(rsa_out_length*sizeof(char));
+        size_t NumberofBytes = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
+	unsigned char* x_Hash = malloc(HASHLEN);
+	SHA256(rsa_out_buffer,x,x_Hash);
+	
+
+	
+
+	
+	
+
+	  
+	
+	
+	
+	
 	/* TODO: encapsulate random symmetric key (SK) using RSA and SHA256;
 	 * encrypt fnIn with SK; concatenate encapsulation and cihpertext;
 	 * write to fnOut. */
