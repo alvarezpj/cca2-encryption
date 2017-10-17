@@ -53,13 +53,8 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
         else
         {
                 // get 512-bit authentication code of entropy with KDF_KEY
-		unsigned int md_len;
-                unsigned char* keys = malloc(64);
-                HMAC_CTX* mctx = HMAC_CTX_new();
-	        HMAC_Init_ex(mctx, &KDF_KEY, 32, EVP_sha512(), 0);
-	        HMAC_Update(mctx, entropy, entLen); 	
-		HMAC_Final(mctx, keys, &md_len); 
-		HMAC_CTX_free(mctx);
+		unsigned char* keys = malloc(64);
+                HMAC(EVP_sha512(), &KDF_KEY, 32, entropy, entLen, keys, NULL); 
                 // half of keys array corresponds to HMAC key
                 // the other half corresponds to AES key
                 memcpy((*K).aesKey, keys, 32); 
@@ -105,21 +100,13 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	// compute hmac of IV + ct
 	unsigned char* iv_ct = malloc(IV_LEN + nWritten);
 	memcpy(iv_ct, IV, IV_LEN);
-	unsigned char* ct_start = iv_ct + IV_LEN;
-	memcpy(ct_start, ct, nWritten);
-        unsigned int md_len = 32;
-        unsigned char* md = malloc(md_len);
-	HMAC_CTX* mctx = HMAC_CTX_new();
-	HMAC_Init_ex(mctx, (*K).hmacKey, 32, EVP_sha256(), 0);
-	HMAC_Update(mctx, iv_ct, IV_LEN + nWritten);
-	HMAC_Final(mctx, md, &md_len);
-	HMAC_CTX_free(mctx);
-	
+	memcpy(iv_ct + IV_LEN, ct, nWritten); 
+        unsigned char* md = malloc(32);
+        HMAC(EVP_sha256(), (*K).hmacKey, 32, iv_ct, IV_LEN + nWritten, md, NULL); 
         //assemble message for specified format
-	unsigned char* iv_ct_hmac = malloc(IV_LEN + nWritten + HM_LEN);
-        unsigned char* hmac_start = iv_ct_hmac + IV_LEN + nWritten;
+	unsigned char* iv_ct_hmac = malloc(IV_LEN + nWritten + HM_LEN); 
 	memcpy(iv_ct_hmac, iv_ct, IV_LEN + nWritten);
-	memcpy(hmac_start, md, md_len);
+	memcpy(iv_ct_hmac + IV_LEN + nWritten, md, 32);
         
 	// copy to outBuf
 	memcpy(outBuf, iv_ct_hmac, IV_LEN + nWritten + HM_LEN);
