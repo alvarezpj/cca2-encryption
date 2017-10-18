@@ -66,11 +66,24 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
         size_t rsa_len = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
 	unsigned char* x_Hash_Buffer = malloc(HASHLEN);
 	SHA256(rsa_out_buffer,sizeof(x),x_Hash_Buffer);
+	
+	struct st ms;
+	int filed =open(fnOut, O_RDWR);
+	if(filed == -1 ){
+		 ERR_print_errors_fp(stderr);
+		 exit(1);
+	}
+	if(fstat(filed, &ms)<0){
+		ERR_print_errors_fp("st");
+		close(fd);
+		exit(1);
+	}
+	size_t len = ms.st_size;
 
 	// Generating SK
 	SKE_KEY K;
 	ske_keyGen(&K,x,HASHLEN);//  KDf to generate SKe
-	unsigned char tempFn[strlen(fnOut)];
+	unsigned char tempFn[len];
 	strcpy(tempFn,fnOut);
 	strcat(tempFn, ".tmp");
 	size_t CT_SK_length = ske_encrypt_file(tempFn,fnIn,&K,NULL,0);
