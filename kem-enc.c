@@ -68,12 +68,12 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	SHA256(rsa_out_buffer,sizeof(x),x_Hash_Buffer);
 	
 	struct st ms;
-	int filed =open(fnOut, O_RDWR);
+	int out =open(fnOut, O_RDWR);
 	if(filed == -1 ){
 		 ERR_print_errors_fp(stderr);
 		 exit(1);
 	}
-	if(fstat(filed, &ms)<0){
+	if(fstat(out, &ms)<0){
 		ERR_print_errors_fp("st");
 		close(fd);
 		exit(1);
@@ -83,26 +83,42 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	// Generating SK
 	SKE_KEY K;
 	ske_keyGen(&K,x,HASHLEN);//  KDf to generate SKe
-	unsigned char tempFn[len];
-	strcpy(tempFn,fnOut);
-	strcat(tempFn, ".tmp");
-	size_t CT_SK_length = ske_encrypt_file(tempFn,fnIn,&K,NULL,0);
+	unsigned char tempFile[len];
+	strcpy(tempFile,fnOut);
+	strcat(tempFile, ".tmpf");
+	size_t CT_SK_length = ske_encrypt_file(tempFile,fnIn,&K,NULL,0);
+	
+	//Can we just use this code instead for combinning everything
+	fprintf(out,%c %c,rsa_out_buffer, tempFile);
+	
+	if( (CT_SK_length+rsa_len)!= len){
+	     perror("error");
+		 exit(1);
+		}
+	close(out);
+	close(fnIn);
+	close(fnOut);
+		
+		
+	
+	
+	
 
-//	Combining RSA(x) and  H(x) into one file out  
-File* out = fopen(fnOut,"w+");
-if (fwrite(&rsa_len,sizeof(size_t),1,out)!=1);
-perror("out write");
-if (fwrite(&CT_SK_length,sizeof(size_t),1,out)!=1);
-perror("out write");
-if (rsa_len!=fwrite(rsa_out_buffer,1,rsa_len,out));
-perror("out write");
-if (CT_SK_length!=fwrite(tempFn,1,CT_SK_length,out));
-perror("out write");
+   //	Combining RSA(x) and  H(x) into one file out  
+   /*    File* out = fopen(fnOut,"w+");
+       if (fwrite(&rsa_len,sizeof(size_t),1,out)!=1);
+        perror("out write");
+       if (fwrite(&CT_SK_length,sizeof(size_t),1,out)!=1);
+       perror("out write");
+       if (rsa_len!=fwrite(rsa_out_buffer,1,rsa_len,out));
+       perror("out write");
+       if (CT_SK_length!=fwrite(tempFn,1,CT_SK_length,out));
+        perror("out write");
 //
 
 // Copy out into fnOut
 
-File* convert =
+File* convert = */
 
 
 
