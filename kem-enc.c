@@ -53,41 +53,54 @@ enum modes {
 #define HASHLEN 32 /* for sha256 */
 
 int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
-{	
-	// generating 32 byte random number for the KDF argument  
+{
+	// generating 32 byte random number for the KDF argument
 	unsigned char* x=malloc(HASHLEN);
 	int randomData= open("/dev/urandom",O_RDONLY);
  	if(read(rabdomData,x,HASHLEN)!=HASHLEN)
 	printf("Error Occured");
 	close(randomData);
 
-	size_t rsa_out_length = mpz_size(K->n)*sizeof(mp_limb_size); 
+	size_t rsa_out_length = mpz_size(K->n)*sizeof(mp_limb_size);
 	unsigned char* rsa_out_buffer=malloc(rsa_out_length*sizeof(char));
         size_t NumberofBytes = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
 	unsigned char* x_Hash = malloc(HASHLEN);
 	SHA256(rsa_out_buffer,x,x_Hash);
-	
+
+	// Generating SK
+	SKE_KEY K;
+	ske_keyGen(&K,x,HASHLEN);//  KDf to generate SKe
+	unsigned char tempFn[strlen(fnOut)];
+	strcpy(tempFn,fnOut);
+	strcat(tempFn, ".tmp");
+	size_t SK_length = ske_encrypt_file(tempFn,fnIn,&K,NULL,0);
 
 	
 
-	
-	
 
-	  
-	
-	
-	
-	
+
+
+
+
+
+
+
+
+
+
+
+
+
 	/* TODO: encapsulate random symmetric key (SK) using RSA and SHA256;
 	 * encrypt fnIn with SK; concatenate encapsulation and cihpertext;
 	 * write to fnOut. */
-	 
-	//Size of the file 
+
+	//Size of the file
 
 	// FIle *file=fopen(fnin,"r");
 	// fseek(file,0,SEEK_END);
 	// size_t len=ftell(file);
-	
+
 /*	struct st ms;
 	int filed =open(fnIn, O_RDWR);
 	if(filed == -1 ){
@@ -116,8 +129,8 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 
 
 	//write to fnOut.
-    
-	
+
+
 	return 0;
 }
 
