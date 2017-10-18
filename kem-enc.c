@@ -65,31 +65,41 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	unsigned char* rsa_out_buffer=malloc(rsa_size*sizeof(char));
         size_t rsa_len = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
 	unsigned char* x_Hash_Buffer = malloc(HASHLEN);
-	SHA256(rsa_out_buffer,sizeof(x),x_Hash_Buffer);
+	SHA256(rsa_out_buffer,HASHLEN,x_Hash_Buffer);
 
 	// Generating SK
 	SKE_KEY K;
 	ske_keyGen(&K,x,HASHLEN);//  KDf to generate SKe
-	unsigned char tempFn[strlen(fnOut)];
-	strcpy(tempFn,fnOut);
-	strcat(tempFn, ".tmp");
-	size_t CT_SK_length = ske_encrypt_file(tempFn,fnIn,&K,NULL,0);
+	unsigned char tempCT_SK[strlen(fnOut)];
+	strcpy(tempCT_SK,fnOut);
+	strcat(tempCT_SK, ".tmp");
+	size_t CT_SK_length = ske_encrypt_file(tempCT_SK,fnIn,&K,NULL,0);
 
-//	Combining RSA(x) and  H(x) into one file out  
-File* out = fopen(fnOut,"w+");
-if (fwrite(&rsa_len,sizeof(size_t),1,out)!=1);
-perror("out write");
-if (fwrite(&CT_SK_length,sizeof(size_t),1,out)!=1);
-perror("out write");
-if (rsa_len!=fwrite(rsa_out_buffer,1,rsa_len,out));
-perror("out write");
-if (CT_SK_length!=fwrite(tempFn,1,CT_SK_length,out));
-perror("out write");
+//	Combining RSA(x) and  H(x) into one file fnOut
+File* fnOut = fopen(fnOut,"w+");
+fwrite(&rsa_len,sizeof(size_t),1,fnOut);
+fwrite(&CT_SK_length,sizeof(size_t),1,fnOut);
+fwrite(rsa_out_buffer,1,rsa_len,fnOut));
+fwrite(tempFn,1,CT_SK_length,fnOut));
 //
 
-// Copy out into fnOut
+// adding cihpertext into fnOut
 
-File* convert =
+File* tempCT = fopen(tempCT_SK,"r");
+size_t temp_1,temp_2;
+unsigned char tem_buffer[8192];
+do{
+	 temp_1 = fread(tem_buffer,1,sizeof(tem_buffer),tempCT);
+	 if (temp_1) {
+		  temp_2 = fwrite(tem_buffer,1,temp_1,fnOut);
+		}
+	 else temp_2=0;
+ }
+ while((temp_1>0) && (temp_1==temp_2));
+ fclose(fnOut); fclose(tempCT_SK); unlink(tempCT_SK);
+
+}
+
 
 
 
