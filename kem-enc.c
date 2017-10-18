@@ -61,11 +61,11 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	printf("Error Occured");
 	close(randomData);
 
-	size_t rsa_out_length = mpz_size(K->n)*sizeof(mp_limb_size);
-	unsigned char* rsa_out_buffer=malloc(rsa_out_length*sizeof(char));
-        size_t NumberofBytes = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
-	unsigned char* x_Hash = malloc(HASHLEN);
-	SHA256(rsa_out_buffer,x,x_Hash);
+	size_t rsa_size = mpz_size(K->n)*sizeof(mp_limb_size);
+	unsigned char* rsa_out_buffer=malloc(rsa_size*sizeof(char));
+        size_t rsa_len = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
+	unsigned char* x_Hash_Buffer = malloc(HASHLEN);
+	SHA256(rsa_out_buffer,sizeof(x),x_Hash_Buffer);
 
 	// Generating SK
 	SKE_KEY K;
@@ -73,9 +73,24 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	unsigned char tempFn[strlen(fnOut)];
 	strcpy(tempFn,fnOut);
 	strcat(tempFn, ".tmp");
-	size_t SK_length = ske_encrypt_file(tempFn,fnIn,&K,NULL,0);
+	size_t CT_SK_length = ske_encrypt_file(tempFn,fnIn,&K,NULL,0);
 
-	
+//	Combining RSA(x) and  H(x) into one file out  
+File* out = fopen(fnOut,"w+");
+if (fwrite(&rsa_len,sizeof(size_t),1,out)!=1);
+perror("out write");
+if (fwrite(&CT_SK_length,sizeof(size_t),1,out)!=1);
+perror("out write");
+if (rsa_len!=fwrite(rsa_out_buffer,1,rsa_len,out));
+perror("out write");
+if (CT_SK_length!=fwrite(tempFn,1,CT_SK_length,out));
+perror("out write");
+//
+
+// Copy out into fnOut
+
+File* convert =
+
 
 
 
