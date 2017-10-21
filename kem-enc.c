@@ -271,18 +271,45 @@ int main(int argc, char *argv[]) {
 				return 1;
 		}
 	}
+	RSA_KEY K;
+	void* InBuf;
+	void* OutBuf;
+	char* keyfile;
+
+
 
 	/* TODO: finish this off.  Be sure to erase sensitive data
 	 * like private keys when you're done with them (see the
 	 * rsa_shredKey function). */
 	switch (mode) {
 		case ENC:
+		keyfile = fopen(fnKey,"r");
+		rsa_readPublic(keyfile,&K);
+		fclose(keyfile);
+		kem_encrypt(fnOut,fnIn,&K);
+		break;
+
 		case DEC:
+		keyfile = fopen(fnKey,"r");
+		rsa_readPrivate(keyfile,&K);
+		fclose(keyfile);
+		kem_decrypt(fnOut,fnIn,&K);
 		case GEN:
+		rsa_keyGen(nBits,&K);
+		FILE* prFD = fopen(fnOut,"w+");
+		unsigned char* pFnExit = ".pub";
+		strcat(fnOut,pFnExit);
+		FILE* puFD = fopen(fnOut,"w+");
+		rsa_writePublic(puFD,&K);
+		rsa_writePrivate(prFD,&K);
+		fclose(puFD);
+		fclose(prFD);
+		break;
+
 		default:
 			return 1;
 	}
-
+rsa_shredKey(&K);
 	return 0;
 }
 //Size of the file
