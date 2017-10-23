@@ -2,12 +2,22 @@
  * simple encryption utility providing CCA2 security.
  * based on the KEM/DEM hybrid model. */
 
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
 #include <fcntl.h>
 #include <openssl/sha.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#ifdef LINUX
+#define MMAP_SEQ MAP_PRIVATE|MAP_POPULATE
+#else
+#define MMAP_SEQ MAP_PRIVATE
+#endif
+
 
 #include "ske.h"
 #include "rsa.h"
@@ -29,6 +39,8 @@ static const char* usage =
 "   --help             show this message and exit.\n";
 
 #define FNLEN 255
+#define HM_LEN
+#define NEWZ(x) mpz_t x; mpz_init(x)
 
 enum modes {
 	ENC,
@@ -50,44 +62,50 @@ enum modes {
  * (see KDF_KEY).
  * */
 
-#define HASHLEN 32 /* for sha256 */
+#define HASHLEN 32
+#define LEN 32
+#define zprintf(x) gmp_printf("%Zd\n", x)/* for sha256 */
 
 int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 {
 	// generating 32 byte random number for the KDF argument
 	unsigned char* x=malloc(HASHLEN);
 	int randomData= open("/dev/urandom",O_RDONLY);
- 	if(read(rabdomData,x,HASHLEN)!=HASHLEN)
-	printf("Error Occured");
+	if(randomData<0)
+	exit(1);
+	else
+ 	if(read(randomData,x,HASHLEN)!=HASHLEN)
+	perror("entropy");
 	close(randomData);
 
-	size_t rsa_size = mpz_size(K->n)*sizeof(mp_limb_size);
+	size_t rsa_size = mpz_size(K->n)*sizeof(mp_limb_t);
 	unsigned char* rsa_out_buffer=malloc(rsa_size*sizeof(char));
+	memset(rsa_out_buffer,0,rsa_size);
         size_t rsa_len = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
 	unsigned char* x_Hash_Buffer = malloc(HASHLEN);
 	SHA256(x,HASHLEN,x_Hash_Buffer);
 
 	// Generating SK
-	SKE_KEY K;
-	ske_keyGen(&K,x,HASHLEN);//  KDf to generate SKe
+	SKE_KEY SK;
+	ske_keyGen(&SK,x,HASHLEN);//  KDf to generate SKe
 	unsigned char tempCT_SK[strlen(fnOut)];
 	strcpy(tempCT_SK,fnOut);
 	strcat(tempCT_SK, ".tmp");
-	size_t CT_SK_length = ske_encrypt_file(tempCT_SK,fnIn,&K,NULL,0);
+	size_t CT_SK_length = ske_encrypt_file(tempCT_SK,fnIn,&SK,NULL,0);
 
 //	Combining RSA(x) and  H(x) into one file fnOut
-File* Out = fopen(fnOut,"w+");
+FILE* Out = fopen(fnOut,"w+");
 // writing headers in order to keep a track of the sizes
 fwrite(&rsa_len,sizeof(size_t),1,Out);
-fwrite(HASHLEN,sizeof(size_t),1,Out);
+fwrite(&CT_SK_length,sizeof(size_t),1,Out);
 // writing actual files into fnOut
-fwrite(rsa_out_buffer,1,HASHLEN,Out));
-fwrite(x_Hash_Buffer,1,CT_SK_length,Out));
+fwrite(rsa_out_buffer,1,HASHLEN,Out);
+fwrite(x_Hash_Buffer,1,CT_SK_length,Out);
 //
 
 // adding cihpertext into fnOut
 
-File* tempCT = fopen(tempCT_SK,"r");
+FILE* tempCT = fopen(tempCT_SK,"r");
 size_t temp_1,temp_2;
 unsigned char tem_buffer[8192];
 do{
@@ -98,9 +116,9 @@ do{
 	 else temp_2=0;
  }
  while((temp_1>0) && (temp_1==temp_2));
- fclose(Out); fclose(tempCT_SK); unlink(tempCT_SK);
+ fclose(Out); fclose(tempCT); unlink(tempCT_SK);
 
-}
+
 
 /* TODO: encapsulate random symmetric key (SK) using RSA and SHA256;
 	 * encrypt fnIn with SK; concatenate encapsulation and cihpertext;
@@ -116,7 +134,7 @@ int kem_decrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 {
 	// reading back the headers
 size_t CT_rsa_len, x_hash_len;
-File* In = fopen(fnIn, "r");
+FILE* In = fopen(fnIn, "r");
 fread(&CT_rsa_len,sizeof(size_t),1,In);
 fread(&x_hash_len,sizeof(size_t),1,In);
 // getting temporary storages
@@ -140,7 +158,7 @@ unsigned char tempCT_SK[strlen(fnOut)];
 strcpy(tempCT_SK,fnOut);
 strcat(tempCT_SK, ".tmp");
 
-File* tempCT = fopen(tempCT_SK,"w+");
+FILE* tempCT = fopen(tempCT_SK,"w+");
 size_t temp_1,temp_2;
 unsigned char tem_buffer[8192];
 do{
@@ -185,7 +203,6 @@ ske_decrypt_file(fnOut,tempCT_SK,&SK,0);
 	/* step 1: recover the symmetric key */
 	/* step 2: check decapsulation */
 	/* step 3: derive key from ephemKey and decrypt data. */
-	return 0;
 
 
 
@@ -206,7 +223,8 @@ ske_decrypt_file(fnOut,tempCT_SK,&SK,0);
 
 
 
-}
+
+
 
 int main(int argc, char *argv[]) {
 	/* define long options */
@@ -272,9 +290,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	RSA_KEY K;
-	void* InBuf;
-	void* OutBuf;
-	char* keyfile;
+
+	FILE* keyfile; void* InBuf; void* OutBuf;
 
 
 
