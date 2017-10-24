@@ -2,12 +2,22 @@
  * simple encryption utility providing CCA2 security.
  * based on the KEM/DEM hybrid model. */
 
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
 #include <fcntl.h>
 #include <openssl/sha.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#ifdef LINUX
+#define MMAP_SEQ MAP_PRIVATE|MAP_POPULATE
+#else
+#define MMAP_SEQ MAP_PRIVATE
+#endif
+
 
 #include "ske.h"
 #include "rsa.h"
@@ -29,6 +39,8 @@ static const char* usage =
 "   --help             show this message and exit.\n";
 
 #define FNLEN 255
+#define HM_LEN
+#define NEWZ(x) mpz_t x; mpz_init(x)
 
 enum modes {
 	ENC,
@@ -50,62 +62,169 @@ enum modes {
  * (see KDF_KEY).
  * */
 
-#define HASHLEN 32 /* for sha256 */
+#define HASHLEN 32
+#define LEN 32
+#define zprintf(x) gmp_printf("%Zd\n", x)/* for sha256 */
 
 int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 {
-	/* TODO: encapsulate random symmetric key (SK) using RSA and SHA256;
+	// generating 32 byte random number for the KDF argument
+	unsigned char* x=malloc(HASHLEN);
+	int randomData= open("/dev/urandom",O_RDONLY);
+	if(randomData<0)
+	exit(1);
+	else
+ 	if(read(randomData,x,HASHLEN)!=HASHLEN)
+	perror("entropy");
+	close(randomData);
+
+	size_t rsa_size = mpz_size(K->n)*sizeof(mp_limb_t);
+	unsigned char* rsa_out_buffer=malloc(rsa_size*sizeof(char));
+	memset(rsa_out_buffer,0,rsa_size);
+        size_t rsa_len = rsa_encrypt(rsa_out_buffer,x,HASHLEN,K);
+	unsigned char* x_Hash_Buffer = malloc(HASHLEN);
+	SHA256(x,HASHLEN,x_Hash_Buffer);
+
+	// Generating SK
+	SKE_KEY SK;
+	ske_keyGen(&SK,x,HASHLEN);//  KDf to generate SKe
+	unsigned char tempCT_SK[strlen(fnOut)];
+	strcpy(tempCT_SK,fnOut);
+	strcat(tempCT_SK, ".tmp");
+	size_t CT_SK_length = ske_encrypt_file(tempCT_SK,fnIn,&SK,NULL,0);
+
+//	Combining RSA(x) and  H(x) into one file fnOut
+FILE* Out = fopen(fnOut,"w+");
+// writing headers in order to keep a track of the sizes
+fwrite(&rsa_len,sizeof(size_t),1,Out);
+fwrite(&CT_SK_length,sizeof(size_t),1,Out);
+// writing actual files into fnOut
+fwrite(rsa_out_buffer,1,HASHLEN,Out);
+fwrite(x_Hash_Buffer,1,CT_SK_length,Out);
+//
+
+// adding cihpertext into fnOut
+
+FILE* tempCT = fopen(tempCT_SK,"r");
+size_t temp_1,temp_2;
+unsigned char tem_buffer[8192];
+do{
+	 temp_1 = fread(tem_buffer,1,sizeof(tem_buffer),tempCT);
+	 if (temp_1) {
+		  temp_2 = fwrite(tem_buffer,1,temp_1,Out);
+		}
+	 else temp_2=0;
+ }
+ while((temp_1>0) && (temp_1==temp_2));
+ fclose(Out); fclose(tempCT); unlink(tempCT_SK);
+
+
+
+/* TODO: encapsulate random symmetric key (SK) using RSA and SHA256;
 	 * encrypt fnIn with SK; concatenate encapsulation and cihpertext;
 	 * write to fnOut. */
-	 
-	//Size of the file 
-
-	// FIle *file=fopen(fnin,"r");
-	// fseek(file,0,SEEK_END);
-	// size_t len=ftell(file);
-	
-/*	struct st ms;
-	int filed =open(fnIn, O_RDWR);
-	if(filed == -1 ){
-		 ERR_print_errors_fp(stderr);
-		 exit(1);
-	}
-	if(fstat(filed, &ms)<0){
-		ERR_print_errors_fp("st");
-		close(fd);
-		exit(1);
-	}
-	size_t len = ms.st_size;
-
-	//encapsulate random symmetric key (SK) using RSA and SHA256;
-	unsigned char* x = malloc(len);
-	SKE_KEY SK;
-	ske_keyGen(&SK,x,len);
-	HMAC(EVP_sha256(), &SK, HASHLEN, fnIn, len, x, NULL);
-
-	//encrypt fnIn with SK
-	ske_encrypt_file(fnOut, fnIn, &SK, NULL, len);
-
-*/
-	//concatenate encapsulation and cihpertext;
 
 
 
-	//write to fnOut.
-    
-	
 	return 0;
 }
 
 /* NOTE: make sure you check the decapsulation is valid before continuing */
 int kem_decrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 {
-	/* TODO: write this. */
+	// reading back the headers
+size_t CT_rsa_len, x_hash_len;
+FILE* In = fopen(fnIn, "r");
+fread(&CT_rsa_len,sizeof(size_t),1,In);
+fread(&x_hash_len,sizeof(size_t),1,In);
+// getting temporary storages
+unsigned char* x_kdf = malloc (HASHLEN*sizeof(char));
+unsigned char* CT_rsa = malloc (CT_rsa_len*sizeof(char));
+unsigned char* x_gen_hash = malloc (HASHLEN*sizeof(char));
+unsigned char* x_hash = malloc (HASHLEN*sizeof(char));
+
+// reading inputs
+fread(CT_rsa,1,sizeof(size_t),In);
+fread(x_hash,1,sizeof(size_t),In);
+// decrypting rsa(x)
+size_t rsa_x = rsa_decrypt(x_kdf,CT_rsa,CT_rsa_len, K);
+SHA256(x_kdf,HASHLEN,x_gen_hash);
+// if sha(x) != x_hash(which is also sha(x))
+if (x_gen_hash != x_kdf)
+printf("Corupted Message, Can not decapsulate");
+
+
+unsigned char tempCT_SK[strlen(fnOut)];
+strcpy(tempCT_SK,fnOut);
+strcat(tempCT_SK, ".tmp");
+
+FILE* tempCT = fopen(tempCT_SK,"w+");
+size_t temp_1,temp_2;
+unsigned char tem_buffer[8192];
+do{
+	 temp_1 = fread(tem_buffer,1,sizeof(tem_buffer),In);
+	 if (temp_1) {
+		  temp_2 = fwrite(tem_buffer,1,temp_1,tempCT);
+		}
+	 else temp_2=0;
+ }
+ while((temp_1>0) && (temp_1==temp_2));
+ fclose(In); fclose(tempCT);
+SKE_KEY SK;
+ske_keyGen(&SK,x_kdf,HASHLEN);
+ske_decrypt_file(fnOut,tempCT_SK,&SK,0);
+
+  unlink(tempCT_SK);
+	return 0;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* TODO: write this. */
 	/* step 1: recover the symmetric key */
 	/* step 2: check decapsulation */
 	/* step 3: derive key from ephemKey and decrypt data. */
-	return 0;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 int main(int argc, char *argv[]) {
 	/* define long options */
@@ -170,17 +289,77 @@ int main(int argc, char *argv[]) {
 				return 1;
 		}
 	}
+	RSA_KEY K;
+
+	FILE* keyfile; void* InBuf; void* OutBuf;
+
+
 
 	/* TODO: finish this off.  Be sure to erase sensitive data
 	 * like private keys when you're done with them (see the
 	 * rsa_shredKey function). */
 	switch (mode) {
 		case ENC:
+		keyfile = fopen(fnKey,"r");
+		rsa_readPublic(keyfile,&K);
+		fclose(keyfile);
+		kem_encrypt(fnOut,fnIn,&K);
+		break;
+
 		case DEC:
+		keyfile = fopen(fnKey,"r");
+		rsa_readPrivate(keyfile,&K);
+		fclose(keyfile);
+		kem_decrypt(fnOut,fnIn,&K);
 		case GEN:
+		rsa_keyGen(nBits,&K);
+		FILE* prFD = fopen(fnOut,"w+");
+		unsigned char* pFnExit = ".pub";
+		strcat(fnOut,pFnExit);
+		FILE* puFD = fopen(fnOut,"w+");
+		rsa_writePublic(puFD,&K);
+		rsa_writePrivate(prFD,&K);
+		fclose(puFD);
+		fclose(prFD);
+		break;
+
 		default:
 			return 1;
 	}
-
+rsa_shredKey(&K);
 	return 0;
 }
+//Size of the file
+
+// FIle *file=fopen(fnin,"r");
+// fseek(file,0,SEEK_END);
+// size_t len=ftell(file);
+
+/*	struct st ms;
+int filed =open(fnIn, O_RDWR);
+if(filed == -1 ){
+	 ERR_print_errors_fp(stderr);
+	 exit(1);
+}
+if(fstat(filed, &ms)<0){
+	ERR_print_errors_fp("st");
+	close(fd);
+	exit(1);
+}
+size_t len = ms.st_size;
+
+//encapsulate random symmetric key (SK) using RSA and SHA256;
+unsigned char* x = malloc(len);
+SKE_KEY SK;
+ske_keyGen(&SK,x,len);
+HMAC(EVP_sha256(), &SK, HASHLEN, fnIn, len, x, NULL);
+
+//encrypt fnIn with SK
+ske_encrypt_file(fnOut, fnIn, &SK, NULL, len);
+
+*/
+//concatenate encapsulation and cihpertext;
+
+
+
+//write to fnOut.
