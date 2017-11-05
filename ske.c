@@ -138,7 +138,7 @@ size_t ske_encrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, unsigne
 		perror("open(fnout, O_RDWR | O_CREAT, (mode_t)0644)");
 		exit(EXIT_FAILURE);
 	}
-	// get status information of opened files
+	// get status information of input file
         struct stat stat_fnin;
         if(0 != fstat(fd_fnin, &stat_fnin))
 	{
@@ -157,8 +157,8 @@ size_t ske_encrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, unsigne
 		exit(EXIT_FAILURE);
 	}
         // increase size of output file
-   	int outLen = ske_getOutputLen(stat_fnin.st_size);
-        if(0 != ftruncate(fd_fnout, (off_t) offset_out + outLen))
+   	int outLen = ske_getOutputLen(stat_fnin.st_size); 
+        if(0 != ftruncate(fd_fnout, (off_t)(offset_out + outLen)))
         {
                 close(fd_fnin);
                 close(fd_fnout);
@@ -173,7 +173,7 @@ size_t ske_encrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, unsigne
 		close(fd_fnin);
 		close(fd_fnout);
                 munmap(mmp_fnin, stat_fnin.st_size);
-		perror("mmap(0, stat_fnin.st_size, PROT_READ, MAP_SHARED, fd_fnin, 0)");
+		perror("mmap(0, outLen, PROT_WRITE, MAP_SHARED, fd_fnout, (off_t)offset_out)");
 		exit(EXIT_FAILURE);
 	}
         // do the encryption
@@ -249,7 +249,7 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t 
 		perror("open(fnout, O_RDWR | O_CREAT, (mode_t)0644)");
 		exit(EXIT_FAILURE);
 	}
-	// get status information of opened files
+	// get status information of input file
         struct stat stat_fnin;
 	if(0 != fstat(fd_fnin, &stat_fnin))
 	{
@@ -268,7 +268,7 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t 
 		exit(EXIT_FAILURE);
 	}
         // truncate output file
-	int outLen = stat_fnin.st_size - IV_LEN - HM_LEN;
+	int outLen = stat_fnin.st_size - offset_in - IV_LEN - HM_LEN;
         if(0 != ftruncate(fd_fnout, outLen))
         {
                 close(fd_fnin);
@@ -288,7 +288,7 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t 
 		exit(EXIT_FAILURE);
 	}
 	// do the decryption 
-	ske_decrypt((unsigned char*)mmp_fnout, (unsigned char*)mmp_fnin, stat_fnin.st_size, K); 
+	ske_decrypt((unsigned char*)mmp_fnout, (unsigned char*)mmp_fnin, stat_fnin.st_size - offset_in, K); 
         // write to file
         if(0 != msync(mmp_fnout, outLen, MS_SYNC))
         {

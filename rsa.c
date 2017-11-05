@@ -146,38 +146,38 @@ int rsa_initKey(RSA_KEY* K)
 
 int rsa_writePublic(FILE* f, RSA_KEY* K)
 {
-	/* only write n,e */
-	zToFile(f,K->n);
-	zToFile(f,K->e);
+	/* only write n,e */ 
+	mpz_out_raw(f, (*K).n);
+	mpz_out_raw(f, (*K).e);
 	return 0;
 }
 
 int rsa_writePrivate(FILE* f, RSA_KEY* K)
 {
-	zToFile(f,K->n);
-	zToFile(f,K->e);
-	zToFile(f,K->p);
-	zToFile(f,K->q);
-	zToFile(f,K->d);
+	mpz_out_raw(f, (*K).n);
+	mpz_out_raw(f, (*K).e);
+	mpz_out_raw(f, (*K).p);
+	mpz_out_raw(f, (*K).q);
+	mpz_out_raw(f, (*K).d);
 	return 0;
 }
 
 int rsa_readPublic(FILE* f, RSA_KEY* K)
 {
 	rsa_initKey(K); /* will set all unused members to 0 */
-	zFromFile(f,K->n);
-	zFromFile(f,K->e);
+	mpz_inp_raw((*K).n, f);
+	mpz_inp_raw((*K).e, f);
 	return 0;
 }
 
 int rsa_readPrivate(FILE* f, RSA_KEY* K)
 {
 	rsa_initKey(K);
-	zFromFile(f,K->n);
-	zFromFile(f,K->e);
-	zFromFile(f,K->p);
-	zFromFile(f,K->q);
-	zFromFile(f,K->d);
+	mpz_inp_raw((*K).n, f);
+	mpz_inp_raw((*K).e, f);
+	mpz_inp_raw((*K).p, f);
+	mpz_inp_raw((*K).q, f);
+	mpz_inp_raw((*K).d, f);
 	return 0;
 }
 

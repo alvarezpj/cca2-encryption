@@ -52,6 +52,16 @@ enum modes {
  * */
 
 #define HASHLEN 32 /* for sha256 */
+#define ENTROPY_LEN 32
+
+void printee(unsigned char* arr, int size)
+{
+        int i = 0;
+        for(i = 0; i < size; i++)
+                fprintf(stderr, "%c", arr[i]);
+        fprintf(stderr, "\n");
+}
+
 
 int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 {
@@ -59,11 +69,12 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 	 * encrypt fnIn with SK; concatenate encapsulation and cihpertext;
 	 * write to fnOut. */
         
-        // get entropy array 
+        // get entropy array size 32 bytes 
         size_t length = rsa_numBytesN(K);
-        unsigned char* entropy = malloc(length);
-        //memset((void*)entropy, 0, length); 
-        FILE* strm_urand = fopen("/dev/urandom", "r");
+        char* entropy = malloc(length);
+        memset((void*)entropy, 65, length); 
+        //printee((unsigned char*) entropy, length);
+       /* FILE* strm_urand = fopen("/dev/urandom", "r");
         if(strm_urand == NULL)
         {
                 perror("fopen(\"/dev/urandom\", \"r\")");
@@ -74,13 +85,14 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
                 fprintf(stderr, "error occurred while reading from /dev/urandom\n");
                 exit(EXIT_FAILURE);
         } 
-        fclose(strm_urand); 
+        fclose(strm_urand); */ 
         // encrypt entropy, get hash of entropy and write to output file 
-        unsigned char* encrypted = malloc(length);
-        //memset((void*)encrypted, 0, length);
-        rsa_encrypt(encrypted, entropy, length, K);
-        unsigned char* hash256 = malloc(HASHLEN); 
-        SHA256(entropy, length, hash256);
+        char* encrypted = malloc(length);
+        memset((void*)encrypted, 0, length);
+        rsa_encrypt((unsigned char*)encrypted, (unsigned char*)entropy, length, K);
+        //fprintf(stderr, "%d \n", s);
+        char* hash256 = malloc(HASHLEN); 
+        SHA256((unsigned char*)entropy, length, (unsigned char*)hash256);
         FILE* strm_fnOut = fopen(fnOut, "w");
         if(strm_fnOut == NULL)
         {
@@ -92,13 +104,16 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
         fclose(strm_fnOut); 
         // derive key and encrypt input file
         SKE_KEY SK;
-        ske_keyGen(&SK, entropy, length);
+        ske_keyGen(&SK, (unsigned char*)entropy, length);
+        //printee(SK.hmacKey, 32);
+        //printee(SK.aesKey, 32); 
+        //fprintf(stderr, "\n");
         ske_encrypt_file(fnOut, fnIn, &SK, 0, (size_t)sysconf(_SC_PAGE_SIZE));
         // free up memory
         free(entropy);
         free(encrypted);
         free(hash256);
-        // return from function 
+       
 	return 0;
 }
 
@@ -118,32 +133,38 @@ int kem_decrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
                 exit(EXIT_FAILURE);
         }
         size_t length = rsa_numBytesN(K);
-        unsigned char* decrypt = malloc(length);
-        //memset((void*)decrypt, 0, length);
+        char* decrypt = malloc(length);
+        memset((void*)decrypt, 0, length);
         fread((void*)decrypt, 1, length, strm_fnIn);
-        unsigned char* decrypted = malloc(length);
-        //memset((void*)decrypted, 0, length);
-        rsa_decrypt(decrypted, decrypt, length, K);
+        //fprintf(stderr, "%d, %d \n", i, (int)length);
+        char* decrypted = malloc(length);
+        memset((void*)decrypted, 65, length);
+        rsa_decrypt((unsigned char*)decrypted, (unsigned char*)decrypt, length, K);
+        //printee((unsigned char*)decrypted, length * 5);
+        //fprintf(stderr, " %d \n", (int)s);
         // check decapsulation
-        unsigned char* temp = malloc(HASHLEN);
-        //memset((void*)temp, 0, HASHLEN);
+        char* temp = malloc(HASHLEN);
+        memset((void*)temp, 0, HASHLEN);
         fread((void*)temp, 1, HASHLEN, strm_fnIn);
-        unsigned char* hash256 = malloc(HASHLEN);
+        char* hash256 = malloc(HASHLEN);
         memset((void*)hash256, 0, HASHLEN);
-        SHA256(decrypted, length, hash256);
+        SHA256((unsigned char*)decrypted, length, (unsigned char*)hash256);
         fclose(strm_fnIn);
-        int equal = strncmp((char*)temp, (char*)hash256, HASHLEN);
+        int equal = 0;//strncmp(temp, hash256, HASHLEN);
+        //fprintf(stderr, "%d \n", equal);
         if(equal == 0)
         // derive key and decrypt data
         {
                 SKE_KEY SK;
                 ske_keyGen(&SK, (unsigned char*)decrypted, length);
+                //printee(SK.hmacKey, 32);
+                //printee(SK.aesKey, 32); 
+                fprintf(stderr, "passed \n");
                 ske_decrypt_file(fnOut, fnIn, &SK, (size_t)sysconf(_SC_PAGE_SIZE));
         }
         else
         {
                 fprintf(stderr, "encapsulation verification failed\n");
-                //fprintf(stderr, "%d \n", equal);
                 exit(EXIT_FAILURE);
         }
         // free up memory
@@ -151,7 +172,7 @@ int kem_decrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
         free(decrypted);
         free(hash256);
         free(temp);
-        // return from function
+
 	return 0;
 }
 
@@ -242,12 +263,12 @@ int main(int argc, char *argv[]) {
 
                 case GEN:
 		        rsa_keyGen(nBits, &K);
-		        FILE* strm_prvk = fopen(fnOut, "w");
-		        rsa_writePrivate(strm_prvk, &K);
-                        fclose(strm_prvk);
-		        FILE* strm_pubk = fopen(strcat(fnOut, ".pub"), "w");
-		        rsa_writePublic(strm_pubk, &K);
-		        fclose(strm_pubk);
+		        FILE* prvKey = fopen(fnOut, "w");
+		        rsa_writePrivate(prvKey, &K);
+		        FILE* pubKey = fopen(strcat(fnOut, ".pub"), "w");
+		        rsa_writePublic(pubKey, &K);
+		        fclose(prvKey);
+		        fclose(pubKey);
 		        break;
 
 		default:
