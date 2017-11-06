@@ -61,8 +61,7 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
         
         // get entropy array 
         size_t length = rsa_numBytesN(K);
-        unsigned char* entropy = malloc(length);
-        //memset((void*)entropy, 0, length); 
+        unsigned char* entropy = malloc(length); 
         FILE* strm_urand = fopen("/dev/urandom", "r");
         if(strm_urand == NULL)
         {
@@ -77,7 +76,7 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
         fclose(strm_urand); 
         // encrypt entropy, get hash of entropy and write to output file 
         unsigned char* encrypted = malloc(length);
-        //memset((void*)encrypted, 0, length);
+        memset((void*)encrypted, 0, length);
         rsa_encrypt(encrypted, entropy, length, K);
         unsigned char* hash256 = malloc(HASHLEN); 
         SHA256(entropy, length, hash256);
@@ -87,13 +86,25 @@ int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
                 perror("fopen(fnOut, \"w\")");
                 exit(EXIT_FAILURE);
         }
-        fwrite((void*)encrypted, 1, length, strm_fnOut);
-        fwrite((void*)hash256, 1, HASHLEN, strm_fnOut);
+        if(fwrite((void*)encrypted, 1, length, strm_fnOut) != length)
+        {
+                fprintf(stderr, "fwrite((void*)encrypted, 1, length, strm_fnOut)");
+                exit(EXIT_FAILURE);
+        }
+        if(fwrite((void*)hash256, 1, HASHLEN, strm_fnOut) != HASHLEN)
+        {
+                fprintf(stderr, "fwrite((void*)hash256, 1, HASHLEN, strm_fnOut)");
+                exit(EXIT_FAILURE);
+        }
         fclose(strm_fnOut); 
         // derive key and encrypt input file
         SKE_KEY SK;
         ske_keyGen(&SK, entropy, length);
-        ske_encrypt_file(fnOut, fnIn, &SK, 0, (size_t)sysconf(_SC_PAGE_SIZE));
+        if(ske_encrypt_file(fnOut, fnIn, &SK, 0, (size_t)sysconf(_SC_PAGE_SIZE)) != 0)
+        {
+                fprintf(stderr, "Error while encrypting file %s \n", fnIn);
+                exit(EXIT_FAILURE);
+        }
         // free up memory
         free(entropy);
         free(encrypted);
@@ -119,33 +130,36 @@ int kem_decrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
         }
         size_t length = rsa_numBytesN(K);
         unsigned char* decrypt = malloc(length);
-        //memset((void*)decrypt, 0, length);
-        fread((void*)decrypt, 1, length, strm_fnIn);
+        if(fread((void*)decrypt, 1, length, strm_fnIn) != length)
+        {
+                fprintf(stderr, "fread((void*)decrypt, 1, length, strm_fnIn)");
+                exit(EXIT_FAILURE);
+        }
         unsigned char* decrypted = malloc(length);
-        //memset((void*)decrypted, 0, length);
+        memset((void*)decrypted, 0, length);
         rsa_decrypt(decrypted, decrypt, length, K);
         // check decapsulation
         unsigned char* temp = malloc(HASHLEN);
-        //memset((void*)temp, 0, HASHLEN);
-        fread((void*)temp, 1, HASHLEN, strm_fnIn);
+        if(fread((void*)temp, 1, HASHLEN, strm_fnIn) != HASHLEN)
+        {
+                fprintf(stderr, "fread((void*)temp, 1, HASHLEN, strm_fnIn)");
+                exit(EXIT_FAILURE);
+        }
         unsigned char* hash256 = malloc(HASHLEN);
-        memset((void*)hash256, 0, HASHLEN);
         SHA256(decrypted, length, hash256);
         fclose(strm_fnIn);
-        int equal = strncmp((char*)temp, (char*)hash256, HASHLEN);
-        if(equal == 0)
+        int equal;
+        equal = strncmp((char*)temp, (char*)hash256, HASHLEN);
         // derive key and decrypt data
-        {
-                SKE_KEY SK;
-                ske_keyGen(&SK, (unsigned char*)decrypted, length);
-                ske_decrypt_file(fnOut, fnIn, &SK, (size_t)sysconf(_SC_PAGE_SIZE));
-        }
-        else
+        if(equal != 0)
         {
                 fprintf(stderr, "encapsulation verification failed\n");
                 //fprintf(stderr, "%d \n", equal);
                 exit(EXIT_FAILURE);
         }
+        SKE_KEY SK;
+        ske_keyGen(&SK, (unsigned char*)decrypted, length);
+        ske_decrypt_file(fnOut, fnIn, &SK, (size_t)sysconf(_SC_PAGE_SIZE));
         // free up memory
         free(decrypt);
         free(decrypted);

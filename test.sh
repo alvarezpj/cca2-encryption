@@ -3,7 +3,8 @@
 # test everything.
 
 # first the basic rsa and ske tests:
-
+rm ./output
+touch ./output
 ./tests/rsa-test &> output
 ./tests/ske-test &>> output
 
@@ -17,6 +18,7 @@ done
 
 # now make a key:
 rm -f /tmp/testkey*
+#rm ./output
 ./kem-enc -b 2048 -g /tmp/testkey
 
 ./kem-test.sh /tmp/testkey >> output
