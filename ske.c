@@ -117,7 +117,7 @@ size_t ske_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
  	free(md);
         free(iv_ct_hmac);
 	return (IV_LEN + nWritten + HM_LEN); /* TODO: should return number of bytes written, which
-	      //       hopefully matches ske_getOutputLen(...). */
+	                                        hopefully matches ske_getOutputLen(...). */
 }
 
 size_t ske_encrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, unsigned char* IV, size_t offset_out)
@@ -259,12 +259,12 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t 
 		exit(EXIT_FAILURE);
 	}
        	// map input file to memory 
-	void* mmp_fnin = mmap(0, stat_fnin.st_size - offset_in, PROT_READ, MAP_SHARED, fd_fnin, (off_t)offset_in);
+	void* mmp_fnin = mmap(0, (stat_fnin.st_size - offset_in), PROT_READ, MAP_SHARED, fd_fnin, (off_t)offset_in);
 	if(mmp_fnin == MAP_FAILED)
 	{
 		close(fd_fnin);
 		close(fd_fnout);
-		perror("mmap(0, stat_fnin.st_size - offset_in, PROT_READ, MAP_SHARED, fd_fnin, (off_t)offset_in)");
+		perror("mmap(0, (stat_fnin.st_size - offset_in), PROT_READ, MAP_SHARED, fd_fnin, (off_t)offset_in)");
 		exit(EXIT_FAILURE);
 	}
         // truncate output file
@@ -273,7 +273,7 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t 
         {
                 close(fd_fnin);
                 close(fd_fnout);
-                munmap(mmp_fnin, stat_fnin.st_size);
+                munmap(mmp_fnin, (stat_fnin.st_size - offset_in));
                 perror("ftruncate(fd_fnout, outLen)");
                 exit(EXIT_FAILURE);
         }
@@ -283,28 +283,27 @@ size_t ske_decrypt_file(const char* fnout, const char* fnin, SKE_KEY* K, size_t 
 	{
 		close(fd_fnin);
 		close(fd_fnout);
-                munmap(mmp_fnin, stat_fnin.st_size);
+                munmap(mmp_fnin, (stat_fnin.st_size - offset_in));
 		perror("mmap(0, outLen, PROT_WRITE, MAP_SHARED, fd_fnout, (off_t)0)");
 		exit(EXIT_FAILURE);
 	}
 	// do the decryption 
-	ske_decrypt((unsigned char*)mmp_fnout, (unsigned char*)mmp_fnin, stat_fnin.st_size - offset_in, K); 
+	ske_decrypt((unsigned char*)mmp_fnout, (unsigned char*)mmp_fnin, (stat_fnin.st_size - offset_in), K); 
         // write to file
         if(0 != msync(mmp_fnout, outLen, MS_SYNC))
         {
                 close(fd_fnin);
                 close(fd_fnout);
-                munmap(mmp_fnin, stat_fnin.st_size);
+                munmap(mmp_fnin, (stat_fnin.st_size - offset_in));
                 munmap(mmp_fnout, outLen);
                 perror("msync(mmp_fnout, outLen, MS_SYNC)");
                 exit(EXIT_FAILURE);
         }
 	// unmap and close files
-        munmap(mmp_fnin, stat_fnin.st_size);
+        munmap(mmp_fnin, (stat_fnin.st_size - offset_in));
         munmap(mmp_fnout, outLen);
         close(fd_fnin);
 	close(fd_fnout);
-
 	return 0;
 }
 

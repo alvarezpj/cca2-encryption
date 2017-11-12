@@ -3,3 +3,4 @@ kem-enc
 output
 *.swp
 *.o
+.core*

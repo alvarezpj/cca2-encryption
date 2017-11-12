@@ -3,8 +3,8 @@
 # test everything.
 
 # first the basic rsa and ske tests:
-rm ./output
-touch ./output
+#rm ./output
+#touch ./output
 ./tests/rsa-test &> output
 ./tests/ske-test &>> output
 
