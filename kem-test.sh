@@ -32,5 +32,5 @@ for f in tests/data/* ; do
 	(( total++ ))
 done
 echo "$match out of $total files matched."
-#rm -r /tmp/480-p1-tdata-*
+rm -r /tmp/480-p1-tdata-*
 
